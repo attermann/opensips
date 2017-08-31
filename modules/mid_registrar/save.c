@@ -887,7 +887,7 @@ update_usrloc:
 
 				cti->expires = e;
 				cti->expires_out = e_out;
-				cti->last_reg_ts = mri->last_reg_ts;
+				cti->last_reg_ts = get_act_time();
 				set_ct(cti);
 			}
 
@@ -1004,7 +1004,7 @@ static inline int save_restore_req_contacts(struct sip_msg *req, struct sip_msg*
 		ct.s = _c->uri.s;
 		shm_str_dup(&ri->ct_uri, &ct);
 		ri->expires_out = e_out;
-		ri->last_reg_ts = mri->last_reg_ts;
+		ri->last_reg_ts = get_act_time();
 
 		set_ct(ri);
 
@@ -1016,12 +1016,13 @@ static inline int save_restore_req_contacts(struct sip_msg *req, struct sip_msg*
 
 		set_ct(NULL);
 	} else {
+		ri = (struct mid_reg_info *)r->attached_data[urecord_data_idx];
 		if (_c == NULL) {
-			ri = (struct mid_reg_info *)r->attached_data[urecord_data_idx];
 			ri->last_reg_ts = 0;
 			ri->skip_dereg = 1;
-		} else
-			((struct mid_reg_info *)r->attached_data[urecord_data_idx])->last_reg_ts = get_act_time();
+		} else {
+			ri->last_reg_ts = get_act_time();
+		}
 	}
 
 	if (_c != NULL) {
