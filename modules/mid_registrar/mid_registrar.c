@@ -36,6 +36,7 @@
 #include "../../timer.h"
 #include "../../mod_fix.h"
 #include "../../data_lump.h"
+#include "../../rw_locking.h"
 
 #include "mid_registrar.h"
 #include "save.h"
@@ -64,6 +65,10 @@ str expires_param = str_init("expires");
 struct usrloc_api ul_api;
 struct tm_binds tm_api;
 struct sig_binds sig_api;
+
+/* specifically used to mutually exclude concurrent calls of the
+ * TMCB_RESPONSE_IN callback, upon SIP 200 OK retransmissions */
+rw_lock_t *tm_retrans_lk;
 
 int default_expires = 3600; /*!< Default expires value in seconds */
 int min_expires     = 10;   /*!< Minimum expires the phones are allowed to use
@@ -384,6 +389,12 @@ static int mod_init(void)
 		return -1;
 	}
 
+	tm_retrans_lk = lock_init_rw();
+	if (!tm_retrans_lk) {
+		LM_ERR("oom\n");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -411,17 +422,10 @@ void mri_free(struct mid_reg_info *mri)
 	       mri->main_reg_uri.s);
 	LM_DBG("ct_uri: '%.*s' %p\n", mri->ct_uri.len, mri->ct_uri.s, mri->ct_uri.s);
 
-	if (mri->aor.s)
-		shm_free(mri->aor.s);
-
-	if (mri->from.s)
-		shm_free(mri->from.s);
-
-	if (mri->to.s)
-		shm_free(mri->to.s);
-
-	if (mri->callid.s)
-		shm_free(mri->callid.s);
+	shm_free(mri->aor.s);
+	shm_free(mri->from.s);
+	shm_free(mri->to.s);
+	shm_free(mri->callid.s);
 
 	if (mri->main_reg_uri.s)
 		shm_free(mri->main_reg_uri.s);

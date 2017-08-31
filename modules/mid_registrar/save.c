@@ -1344,11 +1344,21 @@ void mid_reg_trans_deleted(struct cell *t, int type, struct tmcb_params *params)
 
 void mid_reg_resp_in(struct cell *t, int type, struct tmcb_params *params)
 {
-	struct mid_reg_info *mri = *(struct mid_reg_info **)(params->param);
+	struct mid_reg_info *mri;
 	urecord_t *rec = NULL;
 	struct sip_msg *rpl = params->rpl;
 	struct sip_msg *req = params->req;
 	int code;
+
+	lock_start_write(tm_retrans_lk);
+	mri = *(struct mid_reg_info **)(params->param);
+	if (!mri) {
+		LM_DBG("SIP reply retransmission -> exit\n");
+		lock_stop_write(tm_retrans_lk);
+		return;
+	}
+	*params->param = NULL; /* do not run this callback multiple times! */
+	lock_stop_write(tm_retrans_lk);
 
 	code = rpl->first_line.u.reply.statuscode;
 	LM_DBG("pushing reply back to caller: %d\n", code);
@@ -1459,6 +1469,7 @@ static int prepare_forward(struct sip_msg *msg, udomain_t *ud,
 	if (tm_api.register_tmcb(msg, NULL, TMCB_REQUEST_FWDED,
 	    mid_reg_req_fwded, mri, NULL) <= 0) {
 		LM_ERR("cannot register additional callbacks\n");
+		mri_free(mri);
 		return -1;
 	}
 
